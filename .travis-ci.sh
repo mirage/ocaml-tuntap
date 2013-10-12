@@ -1,4 +1,4 @@
-OPAM_DEPENDS="lwt cstruct ipaddr ounit"
+OPAM_DEPENDS="lwt cstruct ipaddr ounit cmdliner"
 
 case "$OCAML_VERSION,$OPAM_VERSION" in
 3.12.1,1.0.0) ppa=avsm/ocaml312+opam10 ;;
@@ -27,5 +27,7 @@ opam install ${OPAM_DEPENDS}
 
 eval `opam config env`
 make
-ocamlbuild test/getifaddrs_test.native 
-sudo ./_build/test/getifaddrs_test.native
+./_build/test/getifaddrs_test.native
+sudo ./_build/bin/otunctl.native add tun0 tun -u `id -u` -g `id -g` 
+sudo ./_build/bin/otunctl.native add tap0 tap -u `id -u` -g `id -g` 
+./_build/test/sendfd_test.native
