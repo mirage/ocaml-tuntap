@@ -1,0 +1,104 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="Start" href="index.html">
+<link rel="Up" href="index.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Tuntap" rel="Chapter" href="Tuntap.html"><title>Tuntap</title>
+</head>
+<body>
+<div class="navbar">&nbsp;<a class="up" href="index.html" title="Index">Up</a>
+&nbsp;</div>
+<h1>Module <a href="type_Tuntap.html">Tuntap</a></h1>
+
+<pre><span class="keyword">module</span> Tuntap: <code class="code"><span class="keyword">sig</span></code> <a href="Tuntap.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info module top">
+Module for dealing with TUN/TAP devices. TUN refers to layer 3
+    virtual interfaces whereas TAP refers to layer 2 ones.<br>
+</div>
+<hr width="100%">
+
+<pre><span id="VALopentun"><span class="keyword">val</span> opentun</span> : <code class="type">?pi:bool -><br>       ?persist:bool -><br>       ?user:int -><br>       ?group:int -> ?devname:string -> unit -> Unix.file_descr * string</code></pre><div class="info ">
+<code class="code">opentun&nbsp;~pi&nbsp;~persist&nbsp;~user&nbsp;~group&nbsp;~devname&nbsp;()</code> will create a TUN
+    interface. If <code class="code">devname</code> is specified, or if <code class="code">devname</code> specify an
+    unexistant device, a new device will be created, otherwise, the
+    interface <code class="code">devname</code> will be opened. <code class="code">no_pi</code> is to indicate if you
+    want packet information associated with your frames (tap) or
+    packets (tun) (defaults to no information). <code class="code">persist</code> will set the
+    device persistent with permissions set to <code class="code">user</code> and <code class="code">group</code> if
+    supported by your OS (currently MacOSX does not support it). The
+    return value is a pair consisting of a fd opened on the freshly
+    created interface, and its name as will be displayed by command
+    <code class="code">ifconfig</code> for example.<br>
+</div>
+
+<pre><span id="VALopentap"><span class="keyword">val</span> opentap</span> : <code class="type">?pi:bool -><br>       ?persist:bool -><br>       ?user:int -><br>       ?group:int -> ?devname:string -> unit -> Unix.file_descr * string</code></pre><div class="info ">
+Like <code class="code">opentun</code>, but open TAP interfaces instead of TUN ones.<br>
+</div>
+
+<pre><span id="VALclosetun"><span class="keyword">val</span> closetun</span> : <code class="type">string -> unit</code></pre><div class="info ">
+<code class="code">closetun&nbsp;devname&nbsp;kind</code> will destroy <code class="code">devname</code>, if it exists.<br>
+</div>
+
+<pre><span id="VALclosetap"><span class="keyword">val</span> closetap</span> : <code class="type">string -> unit</code></pre><div class="info ">
+Like <code class="code">closetun</code>, but for TAP interfaces.<br>
+</div>
+
+<pre><span id="VALget_ifnamsiz"><span class="keyword">val</span> get_ifnamsiz</span> : <code class="type">unit -> int</code></pre><div class="info ">
+<code class="code">get_ifnamsiz&nbsp;()</code> is the value of the constant IFNAMSIZ,
+    defined in &lt;net/if.h&gt;. Useful for allocating buffers that contain
+    interface names.<br>
+</div>
+
+<pre><span id="VALget_macaddr"><span class="keyword">val</span> get_macaddr</span> : <code class="type">string -> Macaddr.t</code></pre><div class="info ">
+<code class="code">get_hwaddr&nbsp;devname</code> is the MAC address of interface
+    <code class="code">devname</code>, as a raw string (not hexa).<br>
+</div>
+
+<pre><span id="VALset_ipv4"><span class="keyword">val</span> set_ipv4</span> : <code class="type">?netmask:Ipaddr.V4.Prefix.t -> string -> Ipaddr.V4.t -> unit</code></pre><div class="info ">
+<code class="code">set_ipv4&nbsp;~netmask&nbsp;dev&nbsp;ipaddr</code> assigns an <code class="code">ipaddr</code> to interface
+    <code class="code">dev</code>, with associated netmask <code class="code">netmask</code> if specified. If
+    unspecified, the kernel will assign a default netmask
+    automatically.<br>
+</div>
+
+<pre><span id="VALset_up_and_running"><span class="keyword">val</span> set_up_and_running</span> : <code class="type">string -> unit</code></pre><div class="info ">
+<code class="code">set_up_and_running&nbsp;devname</code> sets interface <code class="code">devname</code> up and
+    running. Note that when using the <code class="code">set_ipv4</code> function, the
+    interface will automatically be set up and running.<br>
+</div>
+
+<pre><span id="VALgetifaddrs"><span class="keyword">val</span> getifaddrs</span> : <code class="type">unit -><br>       (string *<br>        [ `V4 of Ipaddr.V4.t * Ipaddr.V4.Prefix.t<br>        | `V6 of Ipaddr.V6.t * Ipaddr.V6.Prefix.t ])<br>       list</code></pre><div class="info ">
+<code class="code">getifaddrs&nbsp;()</code> is the list that associates interface names with
+    IP addresses and prefix. Only interfaces that have an IP address
+    assigned are returned.<br>
+</div>
+
+<pre><span id="VALgetifaddrs_v4"><span class="keyword">val</span> getifaddrs_v4</span> : <code class="type">unit -> (string * (Ipaddr.V4.t * Ipaddr.V4.Prefix.t)) list</code></pre><div class="info ">
+Same as <code class="code">getifaddrs</code> but only return interfaces that have an IPv4
+    assigned.<br>
+</div>
+
+<pre><span id="VALgetifaddrs_v6"><span class="keyword">val</span> getifaddrs_v6</span> : <code class="type">unit -> (string * (Ipaddr.V6.t * Ipaddr.V6.Prefix.t)) list</code></pre><div class="info ">
+Same as <code class="code">getifaddrs</code> but only return interfaces that have an IPv6
+    assigned.<br>
+</div>
+
+<pre><span id="VALaddrs_of_ifname"><span class="keyword">val</span> addrs_of_ifname</span> : <code class="type">string -><br>       [ `V4 of Ipaddr.V4.t * Ipaddr.V4.Prefix.t<br>       | `V6 of Ipaddr.V6.t * Ipaddr.V6.Prefix.t ] list</code></pre><div class="info ">
+<code class="code">addrs_of_ifname&nbsp;ifname</code> is the list of IP addresses and their
+    prefixes associated to interface <code class="code">ifname</code>.<br>
+</div>
+
+<pre><span id="VALv4_of_ifname"><span class="keyword">val</span> v4_of_ifname</span> : <code class="type">string -> (Ipaddr.V4.t * Ipaddr.V4.Prefix.t) list</code></pre><div class="info ">
+<code class="code">v4_of_ifname&nbsp;ifname</code> is the list of IPv4 addresses and their
+    prefixes associated to interface <code class="code">ifname</code>.<br>
+</div>
+
+<pre><span id="VALv6_of_ifname"><span class="keyword">val</span> v6_of_ifname</span> : <code class="type">string -> (Ipaddr.V6.t * Ipaddr.V6.Prefix.t) list</code></pre><div class="info ">
+<code class="code">v6_of_ifname&nbsp;ifname</code> is the list of IPv6 addresses and their
+    prefixes associated to interface <code class="code">ifname</code>.<br>
+</div>
+</body></html>
