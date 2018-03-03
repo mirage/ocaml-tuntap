@@ -1,7 +1,13 @@
 language: c
-install: wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/master/.travis-opam.sh
-script: bash -ex .travis-opam.sh
+install: wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-docker.sh
+script: bash -ex .travis-docker.sh
+services:
+- docker
 env:
-  - PACKAGE=tuntap OCAML_VERSION=4.04
-  - PACKAGE=tuntap OCAML_VERSION=4.05
-  - PACKAGE=tuntap OCAML_VERSION=4.06
+  global:
+  - PINS="tuntap:."
+  - DISTRO="debian-stable"
+  matrix:
+  - PACKAGE="tuntap" OCAML_VERSION="4.04.2"
+  - PACKAGE="tuntap" OCAML_VERSION="4.05.0"
+  - PACKAGE="tuntap" OCAML_VERSION="4.06.0"
