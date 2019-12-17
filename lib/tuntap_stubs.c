@@ -27,9 +27,20 @@
 #include <net/if.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
-#include <netinet/in.h>
-#endif /* __FreeBSD__ */
+
+#if defined(__linux__)
+  #include <linux/if_tun.h>
+  #include <linux/sockios.h>
+  #include <linux/if_packet.h>
+#endif /* __linux__ */
+
+#if !defined(__linux__)
+/* basically: obsd, fbsd, macOS, Apple iOS: */
+  #include <net/if_dl.h>
+  #include <netinet/in.h>
+  #include <sys/sockio.h>
+#endif /* not __linux__ */
+
 #include <ifaddrs.h>
 #include <assert.h>
 
@@ -42,15 +53,37 @@
 static void
 tun_raise_error(char *prefix, int fd)
 {
-  char buf[1024];
-  snprintf(buf, sizeof(buf)-1, "tun[%s]: %s", prefix, strerror(errno));
-  buf[sizeof(buf)-1] = '\0';
+  char buf[1024] = { 0 };
+  snprintf(buf, sizeof(buf), "tun[%s]: %s", prefix, strerror(errno));
   if (fd >= 0) close(fd);
   caml_failwith(buf);
 }
 
+/*
+ * Returns 0 on when validation passes; -1 if not.
+ */
+static int
+tun_is_invalid_devname(char *dev)
+{
+	if (!dev) return -1; /* NULL pointer */
+	size_t len = strnlen(dev, IFNAMSIZ);
+	if (IFNAMSIZ == len) return -1; /* too long */
+	if (0 == len) return -1; /* empty */
+
+	return 0; /* OK */
+}
+
+static int
+tun_is_invalid_devname_caml(value dev)
+{
+	CAMLparam1(dev);
+	size_t devname_len = caml_string_length(dev);
+	if (!caml_string_is_c_safe(dev))
+		CAMLreturn(-1);
+	CAMLreturn(tun_is_invalid_devname(String_val(dev)));
+}
+
 #if defined(__linux__)
-#include <linux/if_tun.h>
 
 static int
 tun_alloc(char *dev, int kind, int pi, int persist, int user, int group)
@@ -62,12 +95,15 @@ tun_alloc(char *dev, int kind, int pi, int persist, int user, int group)
     tun_raise_error("open", -1);
 
   memset(&ifr, 0, sizeof(ifr));
-  ifr.ifr_flags = 0;
   ifr.ifr_flags |= (kind ? IFF_TUN : IFF_TAP);
   ifr.ifr_flags |= (pi ? 0 : IFF_NO_PI);
 
-  if (*dev)
-    strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+  if (*dev) {
+     if (tun_is_invalid_devname(dev)) {
+      tun_raise_error("invalid device name", fd);
+    }
+    strncpy(ifr.ifr_name, dev, IFNAMSIZ-1);
+  }
 
   if (ioctl(fd, TUNSETIFF, (void *)&ifr) < 0)
     tun_raise_error("TUNSETIFF", fd);
@@ -112,42 +148,38 @@ tun_alloc(char *dev, int kind, int pi, int persist, int user, int group)
 }
 #endif
 
-#if defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__)
+
+/*
+ * Retrieve the interface name of a file descriptor.
+ */
 CAMLprim value
-get_macaddr(value devname)
+fd_get_ifname(value fd)
 {
-  CAMLparam1(devname);
-  CAMLlocal1(hwaddr);
+	CAMLparam1(fd);
+	CAMLlocal1(caml_ifname);
 
-  int fd;
-  struct ifreq ifq;
+	struct ifreq ifr;
+	explicit_bzero(&ifr, sizeof(ifr));
 
-  fd = socket(AF_LOCAL, SOCK_DGRAM, 0);
-  strncpy(ifq.ifr_name, String_val(devname), IFNAMSIZ);
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
-  ifq.ifr_addr.sa_len = 6;
-#endif /* __FreeBSD__ */
+	char ifname[IFNAMSIZ];
 
-#if defined(__linux__)
-  if (ioctl(fd, SIOCGIFHWADDR, &ifq) == -1)
-    tun_raise_error("SIOCGIFHWADDR", fd);
-#elif defined(__FreeBSD__)
-  if (ioctl(fd, SIOCGHWADDR, &ifq) == -1)
-    tun_raise_error("SIOCGHWADDR", fd);
-#else
-  if (ioctl(fd, SIOCGIFADDR, &ifq) == -1)
-    tun_raise_error("SIOCGIFADDR", fd);
-#endif
+	/*
+	 * FreeBSD doesn't expose SIOCGIFNAME so we have to take a small detour
+	 * to first retrieve the interface index, then look up the name
+	 * using the index:
+	 */
+	if (ioctl(fd, SIOCGIFINDEX, &ifr)) {
+		tun_raise_error("SIOCGIFINDEX", fd);
+	}
 
-  close(fd);
+	if (if_indextoname(ifr.ifr_ifindex, ifname)) {
+		tun_raise_error("if_indextoname", fd);
+	}
 
-  hwaddr = caml_alloc_string(6);
-  memcpy(String_val(hwaddr), ifq.ifr_addr.sa_data, 6);
+	caml_ifname = caml_copy_string(ifname);
 
-  CAMLreturn (hwaddr);
+	CAMLreturn(caml_ifname);
 }
-
-#elif (defined(__APPLE__) && defined(__MACH__))
 
 CAMLprim value
 get_macaddr(value devname)
@@ -155,35 +187,71 @@ get_macaddr(value devname)
   CAMLparam1(devname);
   CAMLlocal1(v_mac);
 
-  struct ifaddrs *ifap, *p;
-  char *mac_addr[6];
+  struct ifaddrs *ifap, *p = NULL;
+  struct sockaddr *sockaddr = NULL;
+  char mac_addr[6] = {0};
   int found = 0;
-  char name[IFNAMSIZ];
-  snprintf(name, sizeof name, "%s", String_val(devname));
 
   if (getifaddrs(&ifap) != 0) {
     err(1, "get_mac_addr");
   }
 
   for(p = ifap; p != NULL; p = p->ifa_next) {
-    if((strcmp(p->ifa_name, name) == 0) &&
-      (p->ifa_addr != NULL)){
-      char *tmp = LLADDR((struct sockaddr_dl *)(p)->ifa_addr);
-      memcpy(mac_addr, tmp, 6);
-      found = 1;
-      break;
-    }
-  }
+    if (   (p->ifa_name)
+        && (p->ifa_addr)
+        && (strncmp(p->ifa_name, String_val(devname), IFNAMSIZ) == 0)) {
+      sockaddr = p->ifa_addr;
+      //char (*mac_ptr)[sizeof(mac_addr)] = NULL;
+      char *mac_ptr = NULL;
+
+      switch (sockaddr->sa_family) {
+
+#if defined(AF_LINK)
+      case AF_LINK: /* BSD systems, including macOS and Apple iOS: */
+      {
+	      struct sockaddr_dl *dl = (struct sockaddr_dl *)sockaddr;
+	      if (sizeof(mac_addr) == dl->sdl_alen)
+		      mac_ptr = LLADDR(dl);
+	      break;
+      }
+
+#elif defined(AF_PACKET)
+      case AF_PACKET: /* Linux: */
+      {
+	      struct sockaddr_ll *sa = (struct sockaddr_ll *)sockaddr;
+	      if (sizeof(mac_addr) == sa->sll_halen)
+		      mac_ptr = sa->sll_addr;
+	      break;
+      }
+
+#else /* Compile-time error: */
+      case 0:
+      {
+	      _Static_assert(0,
+		  "neither AF_LINK nor AF_PACKET defined; not sure how"
+		  " to retrieve MAC address on this platform.");
+      }
+#endif /* AF_LINK || AF_PACKET */
+      default: break;
+      }
+
+      if (mac_ptr) {
+        memcpy(&mac_addr, mac_ptr, sizeof(mac_addr));
+        found = 1;
+        break;
+      }
+    } /* end if case matching devname */
+  } /* end for loop over ifaddrs */
 
   freeifaddrs(ifap);
+
   if (!found)
     err(1, "get_mac_addr");
 
   v_mac = caml_alloc_string(6);
-  memcpy(String_val(v_mac), mac_addr, 6);
+  memcpy(String_val(v_mac), &mac_addr, 6);
   CAMLreturn (v_mac);
 }
-#endif
 
 // Code for all architectures
 
@@ -193,8 +261,12 @@ get_mtu(value devname)
   CAMLparam1(devname);
   CAMLlocal1(mtu);
 
-  int fd;
+  int fd = -1;
   struct ifreq ifq;
+  explicit_bzero(&ifq, sizeof(ifq));
+
+  if (tun_is_invalid_devname_caml(devname))
+	  tun_raise_error("invalid device name", fd);
 
   fd = socket(AF_INET, SOCK_DGRAM, 0);
   strncpy(ifq.ifr_name, String_val(devname), IFNAMSIZ);
@@ -212,21 +284,26 @@ set_up_and_running(value dev)
 {
   CAMLparam1(dev);
 
-  int fd;
+  int fd = -1;
   struct ifreq ifr;
   int flags;
+  explicit_bzero(&ifr, sizeof(ifr));
+
+  if (tun_is_invalid_devname_caml(dev)) {
+    tun_raise_error("set_up_and_running device name invalid", fd);
+  }
 
   if((fd = socket(PF_INET, SOCK_DGRAM, 0)) == -1)
-    tun_raise_error("set_up_and_running socket", -1);
+    tun_raise_error("set_up_and_running socket", fd);
 
   strncpy(ifr.ifr_name, String_val(dev), IFNAMSIZ);
   ifr.ifr_addr.sa_family = AF_INET;
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
+#if !defined(__linux__)
   ifr.ifr_addr.sa_len = IFNAMSIZ;
-#endif /* __FreeBSD__ */
+#endif /* sa_len member */
 
   if (ioctl(fd, SIOCGIFFLAGS, &ifr) == -1)
-    tun_raise_error("set_up_and_running SIOCGIFFLAGS", -1);
+    tun_raise_error("set_up_and_running SIOCGIFFLAGS", fd);
 
   strncpy(ifr.ifr_name, String_val(dev), IFNAMSIZ);
 
@@ -234,7 +311,7 @@ set_up_and_running(value dev)
   if (flags != ifr.ifr_flags) {
     ifr.ifr_flags = flags;
     if (ioctl(fd, SIOCSIFFLAGS, &ifr) == -1)
-      tun_raise_error("set_up_and_running SIOCSIFFLAGS", -1);
+      tun_raise_error("set_up_and_running SIOCSIFFLAGS", fd);
   }
 
   CAMLreturn(Val_unit);
@@ -245,17 +322,31 @@ set_ipv4(value dev, value ipv4, value netmask)
 {
   CAMLparam3(dev, ipv4, netmask);
 
-  int fd;
+  int fd = -1;
   struct ifreq ifr;
   struct sockaddr_in* addr = (struct sockaddr_in*)&ifr.ifr_addr;
+  explicit_bzero(&ifr, sizeof(ifr));
 
-  memset(&ifr, 0, sizeof(struct ifreq));
+  if (IFNAMSIZ == strnlen(String_val(dev), IFNAMSIZ)) {
+    tun_raise_error("set_ipv4 device name too long", -1);
+  }
+
+  if (caml_string_length(ipv4) != 4) {
+    tun_raise_error("set_ipv4 IPv4 addr must be four octets", -1);
+  }
+
+  if (caml_string_length(netmask) && caml_string_length(netmask) != 4) {
+    tun_raise_error("set_ipv4 netmask must be zero or four octets", -1);
+  }
 
   if((fd = socket(PF_INET, SOCK_DGRAM, 0)) == -1)
     tun_raise_error("set_ipv4 socket", -1);
 
   strncpy(ifr.ifr_name, String_val(dev), IFNAMSIZ);
   ifr.ifr_addr.sa_family = AF_INET;
+  #include <stddef.h>
+  _Static_assert(!(offsetof(typeof(ifr.ifr_addr), sa_len)), "fuck2");
+  _Static_assert(offsetof(typeof(ifr.ifr_addr), sa_len), "fuck1");
 #if defined(__FreeBSD__) || defined(__OpenBSD__)
   ifr.ifr_addr.sa_len = IFNAMSIZ;
 #endif /* __FreeBSD */
@@ -263,15 +354,17 @@ set_ipv4(value dev, value ipv4, value netmask)
   memcpy(&(addr->sin_addr), String_val(ipv4), 4);
 
   if (ioctl(fd, SIOCSIFADDR, &ifr) == -1)
-    tun_raise_error("SIOCSIFADDR", -1);
+    tun_raise_error("SIOCSIFADDR", fd);
 
-  if(caml_string_length(netmask) > 0)
-    {
-      memcpy(&(addr->sin_addr), String_val(netmask), 4);
+  if (caml_string_length(netmask)) {
+    memcpy(&(addr->sin_addr), String_val(netmask), 4);
 
-      if (ioctl(fd, SIOCSIFNETMASK, &ifr) == -1)
-        tun_raise_error("SIOCSIFNETMASK", -1);
+    if (ioctl(fd, SIOCSIFNETMASK, &ifr) == -1) {
+       tun_raise_error("SIOCSIFNETMASK", fd);
     }
+  }
+
+  close(fd);
 
   // Set interface up and running
   set_up_and_running(dev);
@@ -280,7 +373,8 @@ set_ipv4(value dev, value ipv4, value netmask)
 }
 
 CAMLprim value
-tun_opendev(value devname, value kind, value pi, value persist, value user, value group)
+tun_opendev(value devname, value kind, value pi, value persist,
+    value user, value group)
 {
   CAMLparam5(devname, kind, pi, persist, user);
   CAMLxparam1(group);
@@ -289,13 +383,21 @@ tun_opendev(value devname, value kind, value pi, value persist, value user, valu
   char dev[IFNAMSIZ];
   int fd;
 
+  {
+    if (tun_is_invalid_devname_caml(devname)) {
+      caml_failwith("tun_opendev: invalid device name");
+    }
+    int devname_len = caml_string_length(devname);
+
 #if defined (__APPLE__) && defined (__MACH__)
-  if (caml_string_length(devname) < 4)
-    caml_failwith("On MacOSX, you need to specify the name of the device, e.g. tap0");
+    if (devname_len < 4) {
+      caml_failwith("On MacOSX, you need to specify the name of the device, e.g. tap0");
+    }
 #endif
 
-  memset(dev, 0, sizeof dev);
-  memcpy(dev, String_val(devname), caml_string_length(devname));
+    memset(dev, 0, sizeof dev);
+    memcpy(dev, String_val(devname), devname_len);
+  }
 
   // All errors are already checked by tun_alloc, returned fd is valid
   // otherwise it would have crashed before
@@ -329,10 +431,8 @@ getifaddrs_stub()
   CAMLparam0();
   CAMLlocal1(opt);
 
-  int ret;
   struct ifaddrs *ifap = NULL;
-  ret = getifaddrs(&ifap);
-  if (ret == -1)
+  if (-1 == getifaddrs(&ifap))
     tun_raise_error("getifaddrs", -1);
 
   if (ifap == NULL)
@@ -357,8 +457,8 @@ CAMLprim value caml_string_of_sa(struct sockaddr *sa)
   CAMLparam0();
   CAMLlocal1(ret);
 
-  struct sockaddr_in *sa_in;
-  struct sockaddr_in6 *sa_in6;
+  struct sockaddr_in *sa_in = NULL;
+  struct sockaddr_in6 *sa_in6 = NULL;
 
   switch(sa->sa_family)
     {
