@@ -27,7 +27,7 @@ depends: [
   "ipaddr" {>= "5.0.0"}
   "macaddr" {>= "4.0.0"}
   "cmdliner"
-  "ounit" {with-test}
+  "ounit2" {with-test}
   "lwt" {with-test & >= "5.0.0"}
 ]
 build: [
