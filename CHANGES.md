@@ -1,3 +1,8 @@
+## dev
+
+* Use `Bytes_val` in C bindings to write to a string value (@avsm)
+* Fix typos in ocamldoc
+
 ## v2.0.0 (2020-06-18)
 
 * Adapt to ipaddr 5.0.0 interface (#35 @hannesm)
