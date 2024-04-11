@@ -23,7 +23,7 @@ val opentun : ?pi:bool -> ?persist:bool -> ?user:int
 (** [opentun ~pi ~persist ~user ~group ~devname ()] will create a TUN
     interface. If [devname] is specified, or if [devname] specifies
     a nonexistent device, a new device will be created, otherwise, the
-    interface [devname] will be opened. [no_pi] is to indicate if you
+    interface [devname] will be opened. [pi] is to indicate if you
     want packet information associated with your frames (tap) or
     packets (tun) (defaults to no information). [persist] will set the
     device persistent with permissions set to [user] and [group] if
