@@ -1,4 +1,3 @@
 (executable
  (name otunctl)
- (public_name otunctl)
  (libraries tuntap macaddr cmdliner))
