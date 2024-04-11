@@ -28,7 +28,7 @@ depends: [
   "macaddr" {>= "4.0.0"}
   "ounit" {with-test}
   "lwt" {with-test & >= "5.0.0"}
-  # "cmdliner" {with-dev-setup} # for bin/otunctl
+  "cmdliner" {with-test & >= "1.1.0"} # for bin/otunctl
 ]
 build: [
   ["dune" "subst"] {pinned}

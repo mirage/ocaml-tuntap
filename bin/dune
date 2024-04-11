@@ -1,4 +1,3 @@
-;; The below is commented out because of CI issues. See #39
-;(executable
-; (name otunctl)
-; (libraries tuntap macaddr cmdliner))
+(executable
+ (name otunctl)
+ (libraries tuntap macaddr cmdliner))
