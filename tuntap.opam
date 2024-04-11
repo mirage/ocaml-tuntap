@@ -22,7 +22,7 @@ using this library.
 """
 
 depends: [
-  "ocaml" {>= "4.04.2"}
+  "ocaml" {>= "4.06.0"}
   "dune"
   "ipaddr" {>= "5.0.0"}
   "macaddr" {>= "4.0.0"}
