@@ -1,7 +1,9 @@
-## dev
+## v2.0.1 (2024-04-15)
 
 * Use `Bytes_val` in C bindings to write to a string value (@avsm)
 * Fix typos in ocamldoc
+* Do not install otunctl example binary, and update to cmdliner>=1.1.0 (@reynir)
+* Switch to ounit2 (@Alessandro-Barbieri)
 
 ## v2.0.0 (2020-06-18)
 
