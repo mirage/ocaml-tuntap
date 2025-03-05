@@ -37,3 +37,4 @@ build: [
 ]
 depexts: ["linux-headers"] {os-distribution = "alpine"}
 dev-repo: "git+https://github.com/mirage/ocaml-tuntap.git"
+x-maintenance-intent: [ "(latest)" ]
