@@ -27,7 +27,7 @@
 #include <net/if.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
 #include <netinet/in.h>
 #endif /* __FreeBSD__ */
 #include <ifaddrs.h>
@@ -91,7 +91,7 @@ tun_alloc(char *dev, int kind, int pi, int persist, int user, int group)
   return fd;
 }
 
-#elif (defined(__APPLE__) && defined(__MACH__)) || defined(__FreeBSD__) || defined(__OpenBSD__)
+#elif (defined(__APPLE__) && defined(__MACH__)) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
 #include <net/if_dl.h>
 #include <ifaddrs.h>
 
@@ -112,7 +112,7 @@ tun_alloc(char *dev, int kind, int pi, int persist, int user, int group)
 }
 #endif
 
-#if defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__)
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
 CAMLprim value
 get_macaddr(value devname)
 {
@@ -124,14 +124,14 @@ get_macaddr(value devname)
 
   fd = socket(AF_LOCAL, SOCK_DGRAM, 0);
   strncpy(ifq.ifr_name, String_val(devname), IFNAMSIZ);
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
   ifq.ifr_addr.sa_len = 6;
 #endif /* __FreeBSD__ */
 
 #if defined(__linux__)
   if (ioctl(fd, SIOCGIFHWADDR, &ifq) == -1)
     tun_raise_error("SIOCGIFHWADDR", fd);
-#elif defined(__FreeBSD__)
+#elif defined(__FreeBSD__) || defined(__DragonFly__)
   if (ioctl(fd, SIOCGHWADDR, &ifq) == -1)
     tun_raise_error("SIOCGHWADDR", fd);
 #else
@@ -221,7 +221,7 @@ set_up_and_running(value dev)
 
   strncpy(ifr.ifr_name, String_val(dev), IFNAMSIZ);
   ifr.ifr_addr.sa_family = AF_INET;
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
   ifr.ifr_addr.sa_len = IFNAMSIZ;
 #endif /* __FreeBSD__ */
 
@@ -256,7 +256,7 @@ set_ipv4(value dev, value ipv4, value netmask)
 
   strncpy(ifr.ifr_name, String_val(dev), IFNAMSIZ);
   ifr.ifr_addr.sa_family = AF_INET;
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
   ifr.ifr_addr.sa_len = IFNAMSIZ;
 #endif /* __FreeBSD */
 
