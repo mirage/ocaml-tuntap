@@ -1,3 +1,7 @@
+## v2.0.2 (2026-07-06)
+
+* Support DragonFly BSD (#43 @mneumann, review by @djs55)
+
 ## v2.0.1 (2024-04-15)
 
 * Use `Bytes_val` in C bindings to write to a string value (@avsm)
